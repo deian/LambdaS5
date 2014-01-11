@@ -16,6 +16,8 @@
 (test--> →s5 after-lambda after-applying)
 (test--> →s5 after-applying after-lookup)
 
+(test--> →s5 (term ([] [] [] ((λ (x) (if (canFlowTo x ⊤) 3 4)) ⊤)))
+             (term ([] [] [] 3)))
 
 (define double-apply
   (term ([] [] [] ((λ (x y) y) 5 "foo"))))

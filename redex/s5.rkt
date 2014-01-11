@@ -35,10 +35,15 @@
   (obj (obj-attrs [(s property) ...]))
 
   (prim number s #t #f undefined null)
+  
+  ;; two point lattice
+  (l ⊥ ⊤)
+
   (val prim
        (Γ : (λ (x_!_ ...) e))
        ref
-       loc)
+       loc
+       l)
 
   (op1 typeof surface-typeof primitive? prim->str prim->num
        prim->num prim->bool is-callable is-extensible
@@ -53,6 +58,7 @@
   (lbl x)
 
   (e prim
+     l
      x
      (λ (x_!_ ...) e)
      (object obj-attrs-e
@@ -83,116 +89,14 @@
 
      (catch e e)
      (finally e e)
-     (throw e))
+     (throw e)
+
+     (join e e)
+     (meet e e)
+     (canFlowTo e e))
 
    ((f g x y z) variable-not-otherwise-mentioned)
 
-   ;; try-catch contexts
-   (F-property
-      (string ((@v F) (@w bool) (@c bool) (@e bool)))
-      (string ((@g F) (@s e) (@c bool) (@e bool)))
-      (string ((@g val) (@s F) (@c bool) (@e bool))))
-
-   (F-attrs
-      [(obj-attr val) ... (obj-attr F) (obj-attr e) ...])
-
-   (F hole
-      (object F-attrs [(string property-e ...)])
-      (object obj-attrs [(string property) ...
-                         F-property
-                         (string property-e) ...])
-
-      (get-attr attr F e)
-      (get-attr attr val F)
-
-      (set-attr attr F e e)
-      (set-attr attr val F e)
-      (set-attr attr val val F)
-
-      (get-field F e e)
-      (get-field val F e)
-      (get-field val val F)
-
-      (set-field F e e e)
-      (set-field val F e e)
-      (set-field val val F e)
-      (set-field val val val F)
-
-      (delete-field F e e)
-      (delete-field val F e)
-      (delete-field val val F)
-
-      (set! x F)
-
-      (val ... F e ...)
-      (op op1 F)
-      (op op2 F e)
-      (op op2 val F)
-
-      (if F e e)
-
-      (seq F e)
-      (seq val F)
-
-      (let ([x F]) e)
-
-      (break lbl F)
-
-      (throw F))
-
-   (G-property
-      (string ((@v G) (@w bool) (@c bool) (@e bool)))
-      (string ((@g G) (@s e) (@c bool) (@e bool)))
-      (string ((@g val) (@s G) (@c bool) (@e bool))))
-
-   (G-attrs
-      [(obj-attr val) ... (obj-attr G) (obj-attr e) ...])
-
-   (G hole
-      (object G-attrs [(string property-e) ...])
-      (object obj-attrs [(string property) ...
-                         G-property
-                         (string property-e) ...])
-
-      (get-attr attr G e)
-      (get-attr attr val G)
-
-      (set-attr attr G e e)
-      (set-attr attr val G e)
-      (set-attr attr val val G)
-
-      (get-field G e e)
-      (get-field val G e)
-      (get-field val val G)
-
-      (set-field G e e e)
-      (set-field val G e e)
-      (set-field val val G e)
-      (set-field val val val G)
-
-      (delete-field G e e)
-      (delete-field val G e)
-      (delete-field val val G)
-
-      (set! x G)
-
-      (val ... G e ...)
-      (op1 op G)
-      (op2 op G e)
-      (op2 op val G)
-
-      (if G e e)
-
-      (seq G e)
-      (seq val G)
-
-      (let ([x G]) e)
-
-      (label lbl G)
-      (break lbl G)
-
-      (throw G)
-      (catch G e))
 
    ;; Top-level contexts
    (E-property
@@ -248,7 +152,15 @@
 
       (throw E)
       (catch E e)
-      (finally E e)))
+      (finally E e)
+      
+      (join E e)
+      (join val E)
+      (meet E e)
+      (meet val E)
+      (canFlowTo E e)
+      (canFlowTo val E)
+      ))
 
 ;; full terms are of the form
 ;; (σ, Σ, Γ, e)
@@ -287,12 +199,12 @@
         "E-Γλ")
 
    (--> (σ
-         ((loc_1 val_1) ... (loc val) (loc_2 val_2) ...)
-         ((y loc_y) ... (x loc) (z loc_z) ...)
+         [(loc_1 val_1) ... (loc val) (loc_2 val_2) ...]
+         [(y loc_y) ... (x loc) (z loc_z) ...]
          (in-hole E (set! x val_new)))
         (σ
-         ((loc_1 val_1) ... (loc val_new) (loc_2 val_2) ...)
-         ((y loc_y) ... (x loc) (z loc_z) ...)
+         [(loc_1 val_1) ... (loc val_new) (loc_2 val_2) ...]
+         [(y loc_y) ... (x loc) (z loc_z) ...]
          (in-hole E val_new))
         "E-Set!")
 
@@ -469,8 +381,24 @@
          e_2
          "E-If-False")
 
+    ;; labels
+    
+    ; join 
+    (==> (join l_1 l_2) ⊤ "E-join-⊤" (side-condition (or (equal? (term l_1) (term ⊤))
+                                                         (equal? (term l_2) (term ⊤)))))
+    (==> (join l ⊥) l "E-join-⊥-1")
+    (==> (join ⊥ l) l "E-join-⊥-2")
+    ; meet
+    (==> (meet l_1 l_2) any "E-meet-⊥" (side-condition (or (equal? (term l_1) (term ⊥))
+                                                           (equal? (term l_2) (term ⊥)))))
+    (==> (meet l ⊤) l "E-meet-⊤-1")
+    (==> (meet ⊤ l) l "E-meet-⊤-2")
+    ; canFlowTo
+    (==> (canFlowTo l ⊤) #t "E-canFlowTo-x⊤")
+    (==> (canFlowTo ⊥ l) #t "E-canFlowTo-⊥x")
+    (==> (canFlowTo ⊤ ⊥) #f "E-canFlowTo-⊤⊥")
+
     with
     [(--> (σ Σ Γ (in-hole E e_1)) (σ Σ Γ (in-hole E e_2)))
      (==> e_1 e_2)]
 ))
-
