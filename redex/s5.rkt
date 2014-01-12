@@ -402,3 +402,39 @@
     [(--> (σ Σ Γ (in-hole E e_1)) (σ Σ Γ (in-hole E e_2)))
      (==> e_1 e_2)]
 ))
+
+(define-extended-language s5tasks s5
+  
+  (tasks ((σ Σ Γ e) ... ))
+     
+)
+
+
+(define →s5tasks
+  (reduction-relation s5tasks #:arrow ~~>  
+                      
+  (~~> ((σ_1 Σ_1 Γ_1 val) (σ_2 Σ_2 Γ_2 e_2) ...)
+       ((σ_2 Σ_2 Γ_2 e_2) ... )
+       "Schedule-DONE")
+  
+    (~~> ((σ_1 Σ_1 Γ_1 e_1) (σ_2 Σ_2 Γ_2 e_2) ...)
+         ((reduce-s5 (σ_1 Σ_1 Γ_1 e_1)) (σ_2 Σ_2 Γ_2 e_2) ...)
+       "Schedule-ONE"
+       (side-condition (not (redex-match? s5tasks val (term e_1)))))
+))
+
+;; helper function: returns first element of list if it's the only 
+;; element in the list, otherwise it throws an exception
+(define (first-and-only xs)
+  (if (equal? 1 (length xs))
+      (first xs)
+      (error "list is not a singleton!")))
+  
+
+(define-metafunction s5tasks
+  reduce-s5 : P -> P
+  [(reduce-s5 P_1) ,(first-and-only (apply-reduction-relation* →s5 (term P_1)))]
+)
+
+
+(traces →s5tasks (term [([] [] [] 3) ([] [] [] ((λ (x) x) 5)) ]))
