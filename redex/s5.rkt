@@ -404,8 +404,23 @@
 ))
 
 (define-extended-language s5tasks s5
+   ;; object store mapping
+  (ostore (variable-prefix ostore))
+  (θ ((ostore_!_ σ) ...))
+   ;; variable store mapping
+  (vstore (variable-prefix vstore))
+  (υ ((vstore_!_ Σ) ...))
+  ;; env store mapping
+  (estore (variable-prefix estore))
+  (η ((estore_!_ Γ) ...))
   
-  (tasks ((σ Σ Γ e) ... ))
+  ;; Tasks
+  (task (ostore vstore estore e))
+  
+  ;; Concurrent program
+  (C (θ υ η (task ...)))
+  
+
      
 )
 
@@ -413,14 +428,24 @@
 (define →s5tasks
   (reduction-relation s5tasks #:arrow ~~>  
                       
-  (~~> ((σ_1 Σ_1 Γ_1 val) (σ_2 Σ_2 Γ_2 e_2) ...)
-       ((σ_2 Σ_2 Γ_2 e_2) ... )
+  (~~> (θ υ η ((ostore_1 vstore_1 estore_1 val) (ostore_2 vstore_2 estore_2 e_2) ...))
+       (θ υ η ((ostore_2 vstore_2 estore_2 e_2) ...))
        "Schedule-DONE")
   
-    (~~> ((σ_1 Σ_1 Γ_1 e_1) (σ_2 Σ_2 Γ_2 e_2) ...)
-         ((reduce-s5 (σ_1 Σ_1 Γ_1 e_1)) (σ_2 Σ_2 Γ_2 e_2) ...)
+  (~~> (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
+        ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
+        ((estore_first Γ_first) ... (estore_1 Γ_1) (estore_rest Γ_rest) ...)
+        ((ostore_1 vstore_1 estore_1 e_1) (ostore_2 vstore_2 estore_2 e_2) ...))
+;; ~~>
+       (((ostore_first σ_first) ... (ostore_1 (reduce-s5-σ (σ_1 Σ_1 Γ_1 e_1))) (ostore_rest σ_rest) ...)
+        ((vstore_first Σ_first) ... (vstore_1 (reduce-s5-Σ (σ_1 Σ_1 Γ_1 e_1))) (vstore_rest Σ_rest) ...)
+        ((estore_first Γ_first) ... (estore_1 (reduce-s5-Γ (σ_1 Σ_1 Γ_1 e_1))) (estore_rest Γ_rest) ...)
+        ((ostore_1 vstore_1 estore_1 (reduce-s5-e (σ_1 Σ_1 Γ_1 e_1))) (ostore_2 vstore_2 estore_2 e_2) ...))
+       
        "Schedule-ONE"
        (side-condition (not (redex-match? s5tasks val (term e_1)))))
+                      
+
 ))
 
 ;; helper function: returns first element of list if it's the only 
@@ -429,12 +454,39 @@
   (if (equal? 1 (length xs))
       (first xs)
       (error "list is not a singleton!")))
-  
+
 
 (define-metafunction s5tasks
-  reduce-s5 : P -> P
-  [(reduce-s5 P_1) ,(first-and-only (apply-reduction-relation* →s5 (term P_1)))]
+;  reduce-s5 : P -> P
+  [(reduce-s5 P) ,(first-and-only (apply-reduction-relation* →s5 (term P)))]
+)
+
+(define-metafunction s5tasks
+;  reduce-s5-e : P -> e
+  [(reduce-s5-e P) any
+   (where (σ Σ Γ any) (reduce-s5 P))]
+)
+
+(define-metafunction s5tasks
+  reduce-s5-σ : P -> σ
+  [(reduce-s5-σ P) σ
+   (where (σ Σ Γ any) (reduce-s5 P))]
+)
+
+(define-metafunction s5tasks
+  reduce-s5-Σ : P -> Σ
+  [(reduce-s5-Σ P) Σ
+   (where (σ Σ Γ any) (reduce-s5 P))]
+)
+
+(define-metafunction s5tasks
+  reduce-s5-Γ : P -> Γ
+  [(reduce-s5-Γ P) Γ
+   (where (σ Σ Γ any) (reduce-s5 P))]
 )
 
 
-(traces →s5tasks (term [([] [] [] 3) ([] [] [] ((λ (x) x) 5)) ]))
+;(traces →s5tasks (term [([] [] [] 3) ([] [] [] ((λ (x) x) 5)) ]))
+
+(traces →s5tasks (term ([(ostore [])] [(vstore [])] [(estore [])] 
+                        [ (ostore vstore estore ((λ (x) x) (λ (x) x))) (ostore vstore estore (x 4)) ])))
