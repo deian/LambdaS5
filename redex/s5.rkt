@@ -36,7 +36,6 @@
 
   (prim number s #t #f undefined null)
   
-  ;; two point lattice
   (l ⊥ ⊤)
 
   (val prim
@@ -44,6 +43,14 @@
        ref
        loc
        l)
+
+  (native-e (setTimeout0 e)
+            (raiseLabel e)
+            getLabel)
+  (native-E (setTimeout0 E) (raiseLabel E))
+  (native (setTimeout0 val)
+          (raiseLabel val)
+          getLabel)
 
   (op1 typeof surface-typeof primitive? prim->str prim->num
        prim->num prim->bool is-callable is-extensible
@@ -94,8 +101,7 @@
      (join e e)
      (meet e e)
      (canFlowTo e e)
-
-     (setTimeout0 e))
+     native-e)
 
    ((f g x y z) variable-not-otherwise-mentioned)
 
@@ -163,7 +169,8 @@
       (canFlowTo E e)
       (canFlowTo val E)
       
-      (setTimeout0 E)))
+      native-E
+      ))
 
 ;; full terms are of the form
 ;; (σ, Σ, Γ, e)
@@ -407,21 +414,17 @@
 ))
 
 (define-extended-language s5tasks s5
-   ;; object store mapping
-  (ostore (variable-prefix ostore))
-  (θ ((ostore_!_ σ) ...))
-   ;; variable store mapping
-  (vstore (variable-prefix vstore))
-  (υ ((vstore_!_ Σ) ...))
-  ;; env store mapping
-  (estore (variable-prefix estore))
-  (η ((estore_!_ Γ) ...))
+  (idx (variable-prefix idx))
+  (θ ((idx_!_ σ) ...)) ; object store mapping
+  (υ ((idx_!_ Σ) ...)) ; variable store mapping
+  (ε ((idx_!_ Γ) ...)) ; env store mapping
+  (Δ ((idx_!_ l) ...)) ; label store mapping
   
   ;; Tasks
-  (task (ostore vstore estore e))
+  (task (idx_o idx_v idx_e e))
   
   ;; Concurrent program
-  (C (θ υ η (task ...)))
+  (C (θ υ ε Δ (task ...)))
      
 )
 
@@ -429,35 +432,53 @@
 (define →s5tasks
   (reduction-relation s5tasks #:arrow ~~>  
                       
-  (~~> (θ υ η ((ostore_1 vstore_1 estore_1 val) (ostore_2 vstore_2 estore_2 e_2) ...))
-       (θ υ η ((ostore_2 vstore_2 estore_2 e_2) ... (ostore_1 vstore_1 estore_1 val)))
+  (~~> (θ υ ε Δ ((idx_o_1 idx_v_1 idx_e_1 val) task_2 ...))
+       (θ υ ε Δ (task_2 ... (idx_o_1 idx_v_1 idx_e_1 val)))
        "Schedule-DONE")
   ; TODO: remove task following ... ; currently useful for debugging
   
-  (~~> (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
-        ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
-        ((estore_first Γ_first) ... (estore_1 Γ_1) (estore_rest Γ_rest) ...)
-        ((ostore_1 vstore_1 estore_1 e_1) (ostore_2 vstore_2 estore_2 e_2) ...))
+  (~~> (((idx_o_first σ_first) ... (idx_o_1 σ_1) (idx_o_rest σ_rest) ...)
+        ((idx_v_first Σ_first) ... (idx_v_1 Σ_1) (idx_v_rest Σ_rest) ...)
+        ((idx_e_first Γ_first) ... (idx_e_1 Γ_1) (idx_e_rest Γ_rest) ...)
+        Δ
+        ((idx_o_1 idx_v_1 idx_e_1 e_1) task_2 ...))
 ;; ~~>
-       (((ostore_first σ_first) ... (ostore_1 (reduce-s5-σ (σ_1 Σ_1 Γ_1 e_1))) (ostore_rest σ_rest) ...)
-        ((vstore_first Σ_first) ... (vstore_1 (reduce-s5-Σ (σ_1 Σ_1 Γ_1 e_1))) (vstore_rest Σ_rest) ...)
-        ((estore_first Γ_first) ... (estore_1 (reduce-s5-Γ (σ_1 Σ_1 Γ_1 e_1))) (estore_rest Γ_rest) ...)
-        ((ostore_1 vstore_1 estore_1 (reduce-s5-e (σ_1 Σ_1 Γ_1 e_1))) (ostore_2 vstore_2 estore_2 e_2) ...))
+       (((idx_o_first σ_first) ... (idx_o_1 (reduce-s5-σ (σ_1 Σ_1 Γ_1 e_1))) (idx_o_rest σ_rest) ...)
+        ((idx_v_first Σ_first) ... (idx_v_1 (reduce-s5-Σ (σ_1 Σ_1 Γ_1 e_1))) (idx_v_rest Σ_rest) ...)
+        ((idx_e_first Γ_first) ... (idx_e_1 (reduce-s5-Γ (σ_1 Σ_1 Γ_1 e_1))) (idx_e_rest Γ_rest) ...)
+        Δ
+        ((idx_o_1 idx_v_1 idx_e_1 (reduce-s5-e (σ_1 Σ_1 Γ_1 e_1))) task_2 ...))
        "Schedule-ONE"
-       (side-condition (and (not (redex-match? s5tasks val (term e_1))) 
+       (side-condition (and (not (redex-match? s5tasks native (term e_1))) 
                             (not (stuck? (term (σ_1 Σ_1 Γ_1 e_1)))))))
 
-  (~~> (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
-        ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
-        ((estore_first Γ_first) ... (estore_1 Γ_1) (estore_rest Γ_rest) ...)
-        ((ostore_1 vstore_1 estore_1 (in-hole E (setTimeout0 (Γ_3 : (λ (x) e_1))))) (ostore_2 vstore_2 estore_2 e_2) ...))
+  (~~> (((idx_o_first σ_first) ... (idx_o_1 σ_1) (idx_o_rest σ_rest) ...)
+        ((idx_v_first Σ_first) ... (idx_v_1 Σ_1) (idx_v_rest Σ_rest) ...)
+        ((idx_e_first Γ_first) ... (idx_e_1 Γ_1) (idx_e_rest Γ_rest) ...)
+        Δ
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E (setTimeout0 (Γ_3 : (λ (x) e_1))))) task_2 ...))
 ;; ~~>
-       (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
-        ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
-        ((estore_first Γ_first) ... (estore_1 Γ_1) (estore_rest Γ_rest) ... (estore_new Γ_1))
-        ((ostore_1 vstore_1 estore_1 (in-hole E undefined)) (ostore_2 vstore_2 estore_2 e_2) ... (ostore_1 vstore_1 estore_new ((λ (x) e_1) null))))
-       "Schedule-setTimeout0" (fresh estore_new))
+       (((idx_o_first σ_first) ... (idx_o_1 σ_1) (idx_o_rest σ_rest) ...)
+        ((idx_v_first Σ_first) ... (idx_v_1 Σ_1) (idx_v_rest Σ_rest) ...)
+        ((idx_e_first Γ_first) ... (idx_e_1 Γ_1) (idx_e_rest Γ_rest) ... (idx_e_new Γ_1))
+        Δ
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E undefined)) task_2 ... (idx_o_1 idx_v_1 idx_e_new ((λ (x) e_1) null))))
+       "Schedule-setTimeout0" (fresh idx_e_new))
         ; TODO: Just doing application of closure to null does not reduce (BUG??), so we just force E-Ident again
+
+  (~~> (θ υ ε ((idx_o_first l_first) ... (idx_o_1 l_1) (idx_o_rest l_rest) ...)
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E (raiseLabel l))) task_2 ...))
+;; ~~>
+       (θ υ ε ((idx_o_first l_first) ... (idx_o_1 (reduce-s5-e ([] [] [] (join l l_1)))) (idx_o_rest l_rest) ...)
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E undefined)) task_2 ...))
+       "Schedule-raiseLabel")
+
+  (~~> (θ υ ε ((idx_o_first l_first) ... (idx_o_1 l_1) (idx_o_rest l_rest) ...)
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E getLabel)) task_2 ...))
+;; ~~>
+        (θ υ ε ((idx_o_first l_first) ... (idx_o_1 l_1) (idx_o_rest l_rest) ...)
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E l_1)) task_2 ...))
+       "Schedule-getLabel")
 ))
 
 ;; helper function: returns first element of list if it's the only 
@@ -504,7 +525,35 @@
 )
 
 
-(traces →s5tasks (term ([(ostore [])] [(vstore [])] [(estore [])] 
-                        [ (ostore vstore estore 
-                                  ((λ (x) (seq (setTimeout0 (λ (y) x)) (set! x 4))) null)
-                                  )])))
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e 
+;                                 ((λ (x) (seq (setTimeout0 (λ (y) x)) (set! x 4))) undefined)
+;                                 )])))
+ 
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e (raiseLabel ⊤))])))
+ 
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e 
+;                                 ((λ (x) (seq (setTimeout0 (λ (y) x)) 
+;                                              (seq (raiseLabel ⊤) 
+;                                                   (set! x 4)))) null))])))
+
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e getLabel)])))
+
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e 
+;                                ((λ (x) getLabel) undefined))])))
+
+
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e 
+;                                ((λ (x) (set! x getLabel)) undefined))])))
+
+;(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+;                        [(idx_o idx_v idx_e 
+;                                ((λ (x y) (seq (set! x getLabel)
+;                                             (seq (raiseLabel (join ⊤ x)) 
+;                                                  (seq (set! y getLabel) 
+;                                                       (canFlowTo x y))))) undefined undefined))])))
