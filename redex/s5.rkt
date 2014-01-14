@@ -93,7 +93,9 @@
 
      (join e e)
      (meet e e)
-     (canFlowTo e e))
+     (canFlowTo e e)
+
+     (setTimeout0 e))
 
    ((f g x y z) variable-not-otherwise-mentioned)
 
@@ -160,7 +162,8 @@
       (meet val E)
       (canFlowTo E e)
       (canFlowTo val E)
-      ))
+      
+      (setTimeout0 E)))
 
 ;; full terms are of the form
 ;; (σ, Σ, Γ, e)
@@ -380,7 +383,7 @@
     (==> (if #f e_1 e_2)
          e_2
          "E-If-False")
-
+    
     ;; labels
     
     ; join 
@@ -419,8 +422,6 @@
   
   ;; Concurrent program
   (C (θ υ η (task ...)))
-  
-
      
 )
 
@@ -429,8 +430,9 @@
   (reduction-relation s5tasks #:arrow ~~>  
                       
   (~~> (θ υ η ((ostore_1 vstore_1 estore_1 val) (ostore_2 vstore_2 estore_2 e_2) ...))
-       (θ υ η ((ostore_2 vstore_2 estore_2 e_2) ...))
+       (θ υ η ((ostore_2 vstore_2 estore_2 e_2) ... (ostore_1 vstore_1 estore_1 val)))
        "Schedule-DONE")
+  ; TODO: remove task following ... ; currently useful for debugging
   
   (~~> (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
         ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
@@ -441,11 +443,21 @@
         ((vstore_first Σ_first) ... (vstore_1 (reduce-s5-Σ (σ_1 Σ_1 Γ_1 e_1))) (vstore_rest Σ_rest) ...)
         ((estore_first Γ_first) ... (estore_1 (reduce-s5-Γ (σ_1 Σ_1 Γ_1 e_1))) (estore_rest Γ_rest) ...)
         ((ostore_1 vstore_1 estore_1 (reduce-s5-e (σ_1 Σ_1 Γ_1 e_1))) (ostore_2 vstore_2 estore_2 e_2) ...))
-       
        "Schedule-ONE"
-       (side-condition (not (redex-match? s5tasks val (term e_1)))))
-                      
+       (side-condition (and (not (redex-match? s5tasks val (term e_1))) 
+                            (not (stuck? (term (σ_1 Σ_1 Γ_1 e_1)))))))
 
+  (~~> (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
+        ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
+        ((estore_first Γ_first) ... (estore_1 Γ_1) (estore_rest Γ_rest) ...)
+        ((ostore_1 vstore_1 estore_1 (in-hole E (setTimeout0 (Γ_3 : (λ (x) e_1))))) (ostore_2 vstore_2 estore_2 e_2) ...))
+;; ~~>
+       (((ostore_first σ_first) ... (ostore_1 σ_1) (ostore_rest σ_rest) ...)
+        ((vstore_first Σ_first) ... (vstore_1 Σ_1) (vstore_rest Σ_rest) ...)
+        ((estore_first Γ_first) ... (estore_1 Γ_1) (estore_rest Γ_rest) ... (estore_new Γ_1))
+        ((ostore_1 vstore_1 estore_1 (in-hole E undefined)) (ostore_2 vstore_2 estore_2 e_2) ... (ostore_1 vstore_1 estore_new ((λ (x) e_1) null))))
+       "Schedule-setTimeout0" (fresh estore_new))
+        ; TODO: Just doing application of closure to null does not reduce (BUG??), so we just force E-Ident again
 ))
 
 ;; helper function: returns first element of list if it's the only 
@@ -453,13 +465,19 @@
 (define (first-and-only xs)
   (if (equal? 1 (length xs))
       (first xs)
-      (error "list is not a singleton!")))
+      (error 'first-and-only "list ~a is not a singleton!" xs)))
 
-
+;; reduce program with a big step
 (define-metafunction s5tasks
 ;  reduce-s5 : P -> P
-  [(reduce-s5 P) ,(first-and-only (apply-reduction-relation* →s5 (term P)))]
-)
+  [(reduce-s5 P) ,(first-and-only (apply-reduction-relation* →s5 (term P)))])
+
+;; is the term stuck?
+(define (stuck? p)
+   (let ([p1 (apply-reduction-relation* →s5 p)]) 
+     (if (equal? (length p1) 1) 
+         (equal? p (first p1))
+         #f)))
 
 (define-metafunction s5tasks
 ;  reduce-s5-e : P -> e
@@ -486,7 +504,7 @@
 )
 
 
-;(traces →s5tasks (term [([] [] [] 3) ([] [] [] ((λ (x) x) 5)) ]))
-
 (traces →s5tasks (term ([(ostore [])] [(vstore [])] [(estore [])] 
-                        [ (ostore vstore estore ((λ (x) x) (λ (x) x))) (ostore vstore estore (x 4)) ])))
+                        [ (ostore vstore estore 
+                                  ((λ (x) (seq (setTimeout0 (λ (y) x)) (set! x 4))) null)
+                                  )])))
