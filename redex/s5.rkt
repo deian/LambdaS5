@@ -45,10 +45,12 @@
        l)
 
   (native-e (setTimeout0 e)
+            (newWorker e)
             (raiseLabel e)
             getLabel)
-  (native-E (setTimeout0 E) (raiseLabel E))
+  (native-E (setTimeout0 E) (newWorker E)(raiseLabel E))
   (native (setTimeout0 val)
+          (newWorker val)
           (raiseLabel val)
           getLabel)
 
@@ -466,6 +468,20 @@
        "Schedule-setTimeout0" (fresh idx_e_new))
         ; TODO: Just doing application of closure to null does not reduce (BUG??), so we just force E-Ident again
 
+  (~~> (((idx_o_first σ_first) ... (idx_o_1 σ_1) (idx_o_rest σ_rest) ...)
+        ((idx_v_first Σ_first) ... (idx_v_1 Σ_1) (idx_v_rest Σ_rest) ...)
+        ((idx_e_first Γ_first) ... (idx_e_1 Γ_1) (idx_e_rest Γ_rest) ...)
+        ((idx_o_first l_first) ... (idx_o_1 l_1) (idx_o_rest l_rest) ...)
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E (newWorker (Γ_3 : (λ (x) e_1))))) task_2 ...))
+;; ~~>
+       (((idx_o_first σ_first) ... (idx_o_1 σ_1) (idx_o_rest σ_rest) ... (idx_o_new []))
+        ((idx_v_first Σ_first) ... (idx_v_1 Σ_1) (idx_v_rest Σ_rest) ... (idx_v_new []))
+        ((idx_e_first Γ_first) ... (idx_e_1 Γ_1) (idx_e_rest Γ_rest) ... (idx_e_new []))
+        ((idx_o_first l_first) ... (idx_o_1 l_1) (idx_o_rest l_rest) ... (idx_o_new l_1))
+        ((idx_o_1 idx_v_1 idx_e_1 (in-hole E undefined)) task_2 ... (idx_o_new idx_v_new idx_e_new ((λ (x) e_1) null))))
+       "Schedule-newWorker" (fresh idx_o_new idx_v_new idx_e_new))
+  ; TODO: ensure that e_1 has no free variables
+
   (~~> (θ υ ε ((idx_o_first l_first) ... (idx_o_1 l_1) (idx_o_rest l_rest) ...)
         ((idx_o_1 idx_v_1 idx_e_1 (in-hole E (raiseLabel l))) task_2 ...))
 ;; ~~>
@@ -557,3 +573,8 @@
 ;                                             (seq (raiseLabel (join ⊤ x)) 
 ;                                                  (seq (set! y getLabel) 
 ;                                                       (canFlowTo x y))))) undefined undefined))])))
+
+(traces →s5tasks (term ([(idx_o [])] [(idx_v [])] [(idx_e [])] [(idx_o ⊥)] 
+                        [(idx_o idx_v idx_e 
+                                 ((λ (x) (seq (newWorker (λ (y) 33)) (set! x 4))) undefined)
+                                 )])))
